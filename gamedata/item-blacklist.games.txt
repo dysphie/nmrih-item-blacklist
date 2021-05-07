@@ -1,0 +1,20 @@
+"Games"
+{
+	"nmrih"
+	{
+		"Offsets"
+		{
+			"CItem_InventoryBox::_itemCount"
+			{
+				"windows" "1828"
+				"linux" "1848"
+			}
+
+			"CItem_InventoryBox::_weaponItemIds"
+			{
+				"windows" "1832"
+				"linux"	"1852"
+			}
+		}
+	}
+}
