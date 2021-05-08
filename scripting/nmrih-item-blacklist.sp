@@ -278,22 +278,19 @@ public void OnPluginStart()
 	allowedCrateMedical = new ArrayList();
 	allowedCrateAmmo = new ArrayList();
 
-	cvBlacklist = CreateConVar("item_blacklist_ids", "", "Space separated list of weapon IDs to blacklist");
-	cvBlacklist.AddChangeHook(OnBlacklistChanged);
-
 	cvSupplyHack = CreateConVar("item_blacklist_supply_patch_method", "1",
 		"How to deal with blacklisted items in supply crates. \
 		1 = Replace with item of same class, 2 = Leave slot empty");
-
 	cvVerbose = CreateConVar("item_blacklist_verbose", "0", "Print item removals to console");
-
+	cvBlacklist = CreateConVar("item_blacklist_ids", "", "Space separated list of weapon IDs to blacklist");
+	cvBlacklist.AddChangeHook(OnBlacklistChanged);
+	
 	AutoExecConfig();
 }
 
 public void OnConfigsExecuted()
 {
 	BuildWhitelists();
-
 	if (lateloaded)
 		LateRemoveBlacklisted();
 }
@@ -314,16 +311,13 @@ void LateRemoveBlacklisted()
 			continue;
 
 		GetEntityClassname(e, classname, sizeof(classname));
-		
-		if (IsInventoryItem(e))
+		if (IsInventoryItem(e) && IsBlacklistedItemClassname(classname))
 		{
-			if (IsBlacklistedItemClassname(classname))
-			{
-				int owner = GetEntPropEnt(e, Prop_Data, "m_hOwner");
-				if (0 < owner <= MaxClients)
-					SDKHooks_DropWeapon(owner, e);
-				RemoveEntity(e);
-			}
+			int owner = GetEntPropEnt(e, Prop_Data, "m_hOwner");
+			if (0 < owner <= MaxClients)
+				SDKHooks_DropWeapon(owner, e);
+			RemoveEntity(e);
+			continue;
 		}
 
 		if (StrEqual(classname, "item_inventory_box"))
@@ -369,73 +363,69 @@ void BuildWhitelists()
 public void OnEntitySpawned(int entity, const char[] classname)
 {
 	if (StrEqual(classname, "item_inventory_box"))
+	{
 		OnInventoryBoxSpawned(entity);
+		return;
+	}
 
 	NMRItemID itemID;
 	if (g_ItemIDs.GetValue(classname, itemID) && IsItemBlacklisted(itemID))
 	{
 		if (cvVerbose.BoolValue)
 			PrintToServer(PREFIX ... "Prevented spawning %s", classname);
-
 		RemoveEntity(entity);
 	}
 }
 
 void OnInventoryBoxSpawned(int box)
 {
-	//prof.Start();
-
 	Address base = GetEntityAddress(box);
 	Address items = base + offs_itemIDs;
 	
 	for (int i; i < ITEMBOX_MAX_ITEMS; i++, items += 4)
 	{
 		NMRItemID originalID = view_as<NMRItemID>(LoadFromAddress(items, NumberType_Int32));
-		if (IsItemBlacklisted(originalID))
+		if (!IsItemBlacklisted(originalID))
+			continue;
+
+		if (cvSupplyHack.IntValue == 2)
 		{
-			if (cvSupplyHack.IntValue == 2)
-			{
-				StoreToAddress(items, -1, NumberType_Int32);
-				Address addrItemCount = base + offs_itemCount;
-				int n = LoadFromAddress(addrItemCount, NumberType_Int32);
-				StoreToAddress(addrItemCount, --n, NumberType_Int32);
-
-				if (cvVerbose.BoolValue)
-					PrintToServer(PREFIX ... "Supply crate patch: deleted %s", CLASSNAMES[originalID]);
-				continue;
-			}
-
-			ArrayList alternatives;
-
-			if (i < 8)
-				alternatives = allowedCrateWeapons;
-			else if (i < 12)
-				alternatives = allowedCrateMedical;
-			else if (i < 20)
-				alternatives = allowedCrateAmmo;
-
-			int numAlternatives = alternatives.Length;
-			if (!numAlternatives)
-				continue;
-
-			int rnd = GetRandomInt(0, --numAlternatives);
-			int alternativeID = alternatives.Get(rnd);
-			StoreToAddress(items, alternativeID, NumberType_Int32);
+			StoreToAddress(items, -1, NumberType_Int32);
+			Address addrItemCount = base + offs_itemCount;
+			int n = LoadFromAddress(addrItemCount, NumberType_Int32);
+			StoreToAddress(addrItemCount, --n, NumberType_Int32);
 
 			if (cvVerbose.BoolValue)
-				PrintToServer(PREFIX ... "Supply crate patch: replaced %s with %s", 
-					CLASSNAMES[originalID], CLASSNAMES[alternativeID]);
+				PrintToServer(PREFIX ... "Supply crate patch: deleted %s", CLASSNAMES[originalID]);
+			continue;
 		}
+
+		ArrayList alternatives;
+		if (i < 8)
+			alternatives = allowedCrateWeapons;
+		else if (i < 12)
+			alternatives = allowedCrateMedical;
+		else if (i < 20)
+			alternatives = allowedCrateAmmo;
+
+		int numAlternatives = alternatives.Length;
+		if (!numAlternatives)
+			continue;
+
+		int rnd = GetRandomInt(0, --numAlternatives);
+		int alternativeID = alternatives.Get(rnd);
+		StoreToAddress(items, alternativeID, NumberType_Int32);
+
+		if (cvVerbose.BoolValue)
+			PrintToServer(PREFIX ... "Supply crate patch: replaced %s with %s", 
+				CLASSNAMES[originalID], CLASSNAMES[alternativeID]);
 	}
-	// prof.Stop();
-	// PrintToServer(PREFIX ... "Inv hacking took %f seconds", prof.Time);
 }
 
 bool IsItemBlacklisted(NMRItemID itemID)
 {
 	if (!IsValidItemID(itemID))
 		ThrowError("Invalid item ID %d", itemID);
-
 	return g_Blacklisted[itemID];
 }
 
