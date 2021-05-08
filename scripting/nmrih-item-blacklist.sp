@@ -1,5 +1,4 @@
 #include <sdkhooks>
-// #include <profiler>
 #include <sdktools>
 
 #pragma semicolon 1
@@ -253,11 +252,13 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
+	FeatureStatus status = GetFeatureStatus(FeatureType_Capability, "SDKHook_OnEntitySpawned");
+	if (status != FeatureStatus_Available)
+		SetFailState("Sourcemod 1.11 or higher required");
+	 
 	g_ItemIDs = new StringMap();
 	for (int i = 1; i < sizeof(CLASSNAMES); i++)
 		g_ItemIDs.SetValue(CLASSNAMES[i], i);
-
-	// prof = new Profiler();
 
 	GameData g = new GameData("item-blacklist.games");
 	if (!g)
