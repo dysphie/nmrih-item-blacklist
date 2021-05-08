@@ -1,5 +1,5 @@
 #include <sdkhooks>
-#include <profiler>
+// #include <profiler>
 #include <sdktools>
 
 #pragma semicolon 1
