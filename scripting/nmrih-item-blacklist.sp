@@ -311,17 +311,20 @@ void LateRemoveBlacklisted()
 			continue;
 
 		GetEntityClassname(e, classname, sizeof(classname));
-		if (IsInventoryItem(e) && IsBlacklistedItemClassname(classname))
+		if (IsInventoryItem(e))
 		{
-			int owner = GetEntPropEnt(e, Prop_Data, "m_hOwner");
-			if (0 < owner <= MaxClients)
-				SDKHooks_DropWeapon(owner, e);
-			RemoveEntity(e);
-			continue;
+			if (IsBlacklistedItemClassname(classname))
+			{
+				int owner = GetEntPropEnt(e, Prop_Data, "m_hOwner");
+				if (0 < owner <= MaxClients)
+					SDKHooks_DropWeapon(owner, e);
+				RemoveEntity(e);
+			}
 		}
-
-		if (StrEqual(classname, "item_inventory_box"))
+		else if (StrEqual(classname, "item_inventory_box"))
+		{
 			OnInventoryBoxSpawned(e);
+		}
 	}
 }
 
