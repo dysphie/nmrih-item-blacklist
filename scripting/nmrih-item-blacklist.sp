@@ -12,7 +12,7 @@ public Plugin myinfo =
     name        = "[NMRiH] Item Blacklist",
     author      = "Dysphie",
     description = "Prevents specified inventory items from spawning",
-    version     = "0.1.0",
+    version     = "0.2.0",
     url         = ""
 };
 
@@ -252,10 +252,6 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
-	FeatureStatus status = GetFeatureStatus(FeatureType_Capability, "SDKHook_OnEntitySpawned");
-	if (status != FeatureStatus_Available)
-		SetFailState("Sourcemod 1.11 or higher required");
-	 
 	g_ItemIDs = new StringMap();
 	for (int i = 1; i < sizeof(CLASSNAMES); i++)
 		g_ItemIDs.SetValue(CLASSNAMES[i], i);
@@ -363,11 +359,11 @@ void BuildWhitelists()
 			allowedCrateAmmo.Push(SC_DEFAULT_AMMO[i]);
 }
 
-public void OnEntitySpawned(int entity, const char[] classname)
+public void OnEntityCreated(int entity, const char[] classname)
 {
 	if (StrEqual(classname, "item_inventory_box"))
 	{
-		OnInventoryBoxSpawned(entity);
+		SDKHook(entity, SDKHook_SpawnPost, OnInventoryBoxSpawned);
 		return;
 	}
 
