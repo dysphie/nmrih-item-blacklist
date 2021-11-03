@@ -2,18 +2,30 @@
 {
 	"nmrih"
 	{
+		"Signatures"
+		{
+			"GetFileAmmoInfoFromHandle"
+			{
+				"library"	"server"
+				"windows"	"\x55\x8B\xEC\x66\x8B\x45\x08\x66\x3B\x05\x2A\x2A\x2A\x2A\x72\x2A"
+			}
+		}
+
 		"Offsets"
 		{
-			"CItem_InventoryBox::_itemCount"
-			{
-				"windows" "1828"
-				"linux" "1848"
-			}
-
 			"CItem_InventoryBox::_weaponItemIds"
 			{
-				"windows" "1832"
-				"linux"	"1852"
+				"windows" "1888"
+			}
+
+			"CItem_AmmoBox::m_hAmmoFileInfo"
+			{
+				"windows"	"1220"
+			}
+
+			"CItem_AmmoBox::m_szAmmoType"
+			{
+				"windows"	"92"
 			}
 		}
 	}
