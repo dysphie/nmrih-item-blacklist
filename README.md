@@ -1,5 +1,5 @@
 # [NMRiH] Item Blacklist
-Prevent unwanted player items from spawning, including those spawned through supply crates.
+Prevent unwanted inventory items from spawning, including those spawned through supply crates.
 
 # ConVars
 - `item_blacklist_ids` (Default `""`)
