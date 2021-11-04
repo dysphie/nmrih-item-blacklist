@@ -12,7 +12,7 @@ public Plugin myinfo =
     name        = "[NMRiH] Item Blacklist",
     author      = "Dysphie",
     description = "Prevents specified inventory items from spawning",
-    version     = "0.3.0",
+    version     = "0.3.1",
     url         = ""
 };
 
@@ -23,7 +23,7 @@ enum
 	METHOD_REMOVE
 }
 
-char CLASSNAMES[][] = 
+char WEAPON_ALIASES[][] = 
 {
 	"none",
 	"fa_glock17",
@@ -95,7 +95,7 @@ char CLASSNAMES[][] =
 	"fa_sako85_ironsights"
 };
 
-enum NMRItemID
+enum
 {
 	INVALID_ITEM,
 	FA_GLOCK17 = 1, 
@@ -168,7 +168,7 @@ enum NMRItemID
 	MAX_ITEMS
 };
 
-NMRItemID SC_DEFAULT_WEAPONS[] = 
+int SC_DEFAULT_WEAPONS[] = 
 {
 	BOW_DEERHUNTER,
 	FA_1022,
@@ -212,7 +212,7 @@ NMRItemID SC_DEFAULT_WEAPONS[] =
 	ME_WRENCH
 };
 
-NMRItemID SC_DEFAULT_MEDICAL[] = 
+int SC_DEFAULT_MEDICAL[] = 
 {
 	ITEM_BANDAGES,
 	ITEM_FIRST_AID,
@@ -220,7 +220,7 @@ NMRItemID SC_DEFAULT_MEDICAL[] =
 	ITEM_PILLS
 };
 
-NMRItemID SC_DEFAULT_AMMO[] =
+int SC_DEFAULT_AMMO[] =
 {
 	AMMOBOX_12GAUGE,
 	AMMOBOX_22LR,
@@ -235,12 +235,8 @@ NMRItemID SC_DEFAULT_AMMO[] =
 	AMMOBOX_FUEL
 };
 
-stock Address operator+(Address base, int off) {
-	return base + view_as<Address>(off);
-}
-
 // Profiler prof;
-bool g_Blacklisted[MAX_ITEMS];
+bool g_Blacklisted[MAX_ITEMS] = { false, ...};
 ConVar cvBlacklist;
 ConVar cvSupplyHack;
 ConVar cvVerbose;
@@ -248,11 +244,9 @@ ArrayList allowedCrateWeapons;
 ArrayList allowedCrateMedical;
 ArrayList allowedCrateAmmo;
 int off_itemIDs = -1;
-int off_ammoType = -1;
-int off_ammoFileInfo = -1;
 StringMap g_ItemIDs;
 bool lateloaded;
-Handle sdkGetAmmoInfo;
+StringMap ammoMdlToType;
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
@@ -262,18 +256,37 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
+	// Game doesn't properly populate CItem_AmmoBox->m_hAmmoFileInfo->m_szAmmoType nor
+	// CItem_AmmoBox->m_szAmmoName so let's just infer it from their model
+	ammoMdlToType = new StringMap();
+	ammoMdlToType.SetString("models/items/ammo/ammo_762.mdl", "ammobox_762mm");
+	ammoMdlToType.SetString("models/items/ammo/ammo_arrow_box.mdl", "ammobox_arrow");
+	ammoMdlToType.SetString("models/items/ammo/ammo_arrow_single.mdl", "ammobox_arrow");
+	ammoMdlToType.SetString("models/items/ammo/ammo_flares.mdl", "ammobox_flare");
+	ammoMdlToType.SetString("models/items/ammo/ammo_gascan.mdl", "ammobox_fuel");
+	ammoMdlToType.SetString("models/items/ammo/ammo_9mm.mdl", "ammobox_9mm");
+	ammoMdlToType.SetString("models/items/ammo/ammo_12g.mdl", "ammobox_12gauge");
+	ammoMdlToType.SetString("models/items/ammo/ammo_22lr.mdl", "ammobox_22lr");
+	ammoMdlToType.SetString("models/items/ammo/ammo_45acp.mdl", "ammobox_45acp");
+	ammoMdlToType.SetString("models/items/ammo/ammo_308.mdl", "ammobox_308");
+	ammoMdlToType.SetString("models/items/ammo/ammo_357.mdl", "ammobox_357");
+	ammoMdlToType.SetString("models/items/ammo/ammo_556.mdl", "ammobox_556");
+	ammoMdlToType.SetString("models/items/ammo/ammo_556.mdl", "ammobox_556");
+	ammoMdlToType.SetString("models/weapons/tool_barricade/w_barricadeboard.mdl", "ammobox_board");
+
 	g_ItemIDs = new StringMap();
-	for (int i = 1; i < sizeof(CLASSNAMES); i++)
-		g_ItemIDs.SetValue(CLASSNAMES[i], i);
+	for (int i = 1; i < sizeof(WEAPON_ALIASES); i++)
+		g_ItemIDs.SetValue(WEAPON_ALIASES[i], i);
 
-	GameData g = new GameData("item-blacklist.games");
-	if (!g)
+	GameData gamedata = new GameData("item-blacklist.games");
+	if (!gamedata)
+	{
 		SetFailState("Failed to open \"gamedata/item-blacklist.games.txt\"");
+	}
 
-	SetupOffsets(g);
-	SetupSDKCalls(g);
+	SetupOffsets(gamedata);
 
-	delete g;
+	delete gamedata;
 
 	allowedCrateWeapons = new ArrayList();
 	allowedCrateMedical = new ArrayList();
@@ -285,17 +298,17 @@ public void OnPluginStart()
 	cvVerbose = CreateConVar("item_blacklist_verbose", "0", "Print item removals to console");
 	cvBlacklist = CreateConVar("item_blacklist_ids", "", "Space separated list of weapon IDs to blacklist");
 	cvBlacklist.AddChangeHook(OnBlacklistChanged);
-	
 
 	AutoExecConfig();
 }
-
 
 public void OnConfigsExecuted()
 {
 	BuildWhitelists();
 	if (lateloaded)
+	{
 		LateRemoveBlacklisted();
+	}
 }
 
 public void OnBlacklistChanged(ConVar convar, const char[] oldValue, const char[] newValue)
@@ -325,7 +338,9 @@ void BuildWhitelists()
 	allowedCrateAmmo.Clear();
 
 	for (int i; i < sizeof(g_Blacklisted); i++)
+	{
 		g_Blacklisted[i] = false;
+	}
 
 	char buffer[1024];
 	cvBlacklist.GetString(buffer, sizeof(buffer));
@@ -335,9 +350,16 @@ void BuildWhitelists()
 
 	for (int i; i < numIDs; i++)
 	{
-		NMRItemID id = view_as<NMRItemID>(StringToInt(ids[i]));
+		int id = StringToInt(ids[i]);
 		if (IsValidItemID(id))
+		{
 			g_Blacklisted[id] = true;
+
+			if (cvVerbose.BoolValue)
+			{
+				PrintToServer(PREFIX ... "Blacklisted %s", WEAPON_ALIASES[id]);
+			}
+		}
 	}
 
 	for (int i; i < sizeof(SC_DEFAULT_WEAPONS); i++)
@@ -358,20 +380,19 @@ public void OnEntityCreated(int entity, const char[] classname)
 	ProcessEntity(entity, classname, false);
 }
 
-
 void ProcessEntity(int entity, const char[] classname, bool spawned)
 {
-	if (cvSupplyHack.IntValue == METHOD_IGNORE)
-		return;
+	// NMRiH 1.12.0 is crashing if entities are removed on the frame 
+	// they've been spawned, hence the RequestFrames
 
 	if (StrEqual(classname, "item_inventory_box"))
+	{
 		SDKHook(entity, SDKHook_Use, OnInventoryBoxUse);
-
+	}
+	
 	else if (StrEqual(classname, "item_ammo_box"))
 	{
-		char ammoName[64];
-		GetAmmoType(entity, ammoName, sizeof(ammoName));
-		CheckShouldRemove(entity, ammoName, false);
+		RequestFrame(CheckAmmoModel, EntIndexToEntRef(entity));
 	}
 
 	else if (strncmp(classname, "fa_", 3) == 0 || 
@@ -381,52 +402,100 @@ void ProcessEntity(int entity, const char[] classname, bool spawned)
 		strncmp(classname, "tool_", 5) == 0 || 
 		strncmp(classname, "item_", 5) == 0)
 	{
-		CheckShouldRemove(entity, classname, spawned);
+		if (CheckShouldRemove(entity, classname, spawned))
+		{
+			RequestFrame(FrameRemoveEntity, EntIndexToEntRef(entity));
+		}
 	}
 }
 
-void CheckShouldRemove(int entity, const char[] alias, bool checkOwner)
+void CheckAmmoModel(int entityRef)
 {
-	NMRItemID itemID;
-	if (g_ItemIDs.GetValue(alias, itemID) && g_Blacklisted[itemID])
-	{
-		if (checkOwner) 
-		{
-			int owner = GetEntPropEnt(entity, Prop_Data, "m_hOwner");
-			if (0 < owner <= MaxClients)
-			{
-				SDKHooks_DropWeapon(owner, entity);
-			}
-		}
+	int entity = EntRefToEntIndex(entityRef);
+	if (entity == -1)
+		return;
 
-		RemoveEntity(entity);
-		if (cvVerbose.BoolValue)
-			PrintToServer(PREFIX ... "Prevented spawning %s", alias);
+	char buffer[512];
+	GetEntPropString(entity, Prop_Data, "m_ModelName", buffer, sizeof(buffer));
+
+	if (buffer[0] && ammoMdlToType.GetString(buffer, buffer, sizeof(buffer)) && IsAliasBlacklisted(buffer))
+	{
+		if (CheckShouldRemove(entity, buffer))
+		{
+			RemoveEntity(entity);
+		}
 	}
+}
+
+void FrameRemoveEntity(int entityRef)
+{
+	int entity = EntRefToEntIndex(entityRef);
+	if (entity != -1)
+		RemoveEntity(entity);
+}
+
+bool CheckShouldRemove(int entity, const char[] alias, bool clearOwner = false)
+{
+	if (!IsAliasBlacklisted(alias))
+	{
+		return false;
+	}
+	
+	if (clearOwner && HasEntProp(entity, Prop_Data, "m_hOwner")) 
+	{
+		int owner = GetEntPropEnt(entity, Prop_Data, "m_hOwner");
+		if (0 < owner <= MaxClients)
+		{
+			SDKHooks_DropWeapon(owner, entity);
+		}
+	}
+
+	if (cvVerbose.BoolValue)
+	{
+		PrintToServer(PREFIX ... "Prevented spawning %s", alias);
+	}
+
+	return true;
+}
+
+bool IsAliasBlacklisted(const char[] alias)
+{
+	int itemID;
+	return g_ItemIDs.GetValue(alias, itemID) && g_Blacklisted[itemID];
 }
 
 Action OnInventoryBoxUse(int box, int activator, int caller, UseType type, float value)
 {	
 	if (cvSupplyHack.IntValue == METHOD_IGNORE)
+	{
 		return Plugin_Continue;
+	}
 
 	for (int i; i < ITEMBOX_MAX_ITEMS; i++)
 	{
-		NMRItemID originalID = InventoryBox_GetItem(box, i);
+		int originalID = InventoryBox_GetItem(box, i);
 		if (!g_Blacklisted[originalID])
+		{
 			continue;
+		}
 
-		NMRItemID replacementID = INVALID_ITEM;
+		int replacementID = INVALID_ITEM;
 
 		if (cvSupplyHack.IntValue == METHOD_REPLACE)
 		{
 			ArrayList alternatives;
 			if (i < 8)
+			{
 				alternatives = allowedCrateWeapons;
+			}
 			else if (i < 12)
+			{
 				alternatives = allowedCrateMedical;
+			}
 			else if (i < 20)
+			{
 				alternatives = allowedCrateAmmo;
+			}
 
 			if (alternatives && alternatives.Length > 0)
 			{
@@ -438,75 +507,35 @@ Action OnInventoryBoxUse(int box, int activator, int caller, UseType type, float
 		InventoryBox_SetItem(box, i, replacementID);
 
 		if (cvVerbose.BoolValue)
+		{
 			PrintToServer(PREFIX ... "Supply crate patch: replaced %s with %s", 
-				CLASSNAMES[originalID], CLASSNAMES[replacementID]);
+				WEAPON_ALIASES[originalID], WEAPON_ALIASES[replacementID]);
+		}
 	}
 
 	return Plugin_Continue;
 }
 
-NMRItemID InventoryBox_GetItem(int box, int index)
+int InventoryBox_GetItem(int box, int index)
 {
-	return view_as<NMRItemID>(GetEntData(box, off_itemIDs + index * 4));
+	return GetEntData(box, off_itemIDs + index * 4);
 }
 
-void InventoryBox_SetItem(int box, int index, NMRItemID itemID)
+void InventoryBox_SetItem(int box, int index, int itemID)
 {
 	SetEntData(box, off_itemIDs + index * 4, itemID, 4);
 }
 
-bool IsValidItemID(NMRItemID itemID)
+bool IsValidItemID(int itemID)
 {
 	return INVALID_ITEM < itemID < MAX_ITEMS;
-}
-
-void SetupSDKCalls(GameData gamedata)
-{
-	StartPrepSDKCall(SDKCall_Static);
-	PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "GetFileAmmoInfoFromHandle");
-	PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
-	PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
-	if (!(sdkGetAmmoInfo = EndPrepSDKCall()))
-		SetFailState("Failed to SDKCall GetFileAmmoInfoFromHandle");
 }
 
 void SetupOffsets(GameData gamedata)
 {
 	off_itemIDs = gamedata.GetOffset("CItem_InventoryBox::_weaponItemIds");
 	if (off_itemIDs == -1)
+	{
 		SetFailState("Failed to get CItem_InventoryBox::_weaponItemIds offset");
-
-	off_ammoFileInfo = gamedata.GetOffset("CItem_AmmoBox::m_hAmmoFileInfo");
-	if (off_ammoFileInfo == -1)
-		SetFailState("Failed to get offset CItem_AmmoBox::m_hAmmoFileInfo");
-
-	off_ammoType = gamedata.GetOffset("CItem_AmmoBox::m_szAmmoType");
-	if (off_ammoType == -1)
-		SetFailState("Failed to get offset CItem_AmmoBox::m_szAmmoType");
-}
-
-void GetAmmoType(int ammobox, char[] buffer, int maxlen)
-{
-	Address m_hAmmoFileInfo = view_as<Address>(GetEntData(ammobox, off_ammoFileInfo));
-	Address fileammoinfo = SDKCall(sdkGetAmmoInfo, m_hAmmoFileInfo);
-	UTIL_StringtToCharArray(fileammoinfo + view_as<Address>(off_ammoType), buffer, maxlen);
-	Format(buffer, maxlen, "ammobox_%s", buffer);
-}
-
-int UTIL_StringtToCharArray(Address stringt, char[] buffer, int maxlen)
-{
-	if (stringt == Address_Null)
-		ThrowError("string_t address is null");
-
-	if (maxlen <= 0)
-		ThrowError("Buffer size is negative or zero");
-
-	int max = maxlen-1;
-	int i = 0;
-	for (; i < max; i++)
-		if ((buffer[i] = view_as<char>(LoadFromAddress(stringt + view_as<Address>(i), NumberType_Int8))) == '\0')
-			return i;
-
-	buffer[i] = '\0';
-	return i;
+	}
 }
