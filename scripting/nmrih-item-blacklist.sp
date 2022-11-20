@@ -12,7 +12,7 @@ public Plugin myinfo =
     name        = "[NMRiH] Item Blacklist",
     author      = "Dysphie",
     description = "Prevents specified inventory items from spawning",
-    version     = "0.3.1",
+    version     = "0.3.3",
     url         = ""
 };
 
@@ -382,6 +382,11 @@ public void OnEntityCreated(int entity, const char[] classname)
 
 void ProcessEntity(int entity, const char[] classname, bool spawned)
 {
+	if (cvSupplyHack.IntValue == METHOD_IGNORE)
+	{
+		return;
+	}
+
 	// NMRiH 1.12.0 is crashing if entities are removed on the frame 
 	// they've been spawned, hence the RequestFrames
 
