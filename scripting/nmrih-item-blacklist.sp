@@ -12,8 +12,8 @@ public Plugin myinfo =
     name        = "[NMRiH] Item Blacklist",
     author      = "Dysphie",
     description = "Prevents specified inventory items from spawning",
-    version     = "0.3.3",
-    url         = ""
+    version     = "0.3.4",
+    url         = "https://github.com/dysphie/nmrih-item-blacklist"
 };
 
 enum

@@ -6,8 +6,8 @@
 		{
 			"CItem_InventoryBox::_weaponItemIds"
 			{
-				"windows" 	"1892"
-				"linux"		"1916"
+				"windows" 	"1880"
+				"linux"		"1936"
 			}
 		}
 	}
