@@ -1,6 +1,7 @@
 # [NMRiH] Item Blacklist
 Prevent unwanted inventory items from spawning, including those spawned through supply crates.
 
+
 # ConVars
 - `item_blacklist_ids` (Default `""`)
 
@@ -10,6 +11,9 @@ Example: `43 61` would prevent the spawning of walkietalkies and boards respecti
 - `item_blacklist_supply_patch_method` (Default: `1`)
 
 What to do with blocked items in supply crates. 1 = Replace with similar item, 2 = Leave slot empty.
+
+> [!NOTE]  
+> This plugin doesn't currently support filtering "uncategorized" supply crates.
 
 - `item_blacklist_verbose` (Default: `0`)
 
