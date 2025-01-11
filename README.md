@@ -1,3 +1,6 @@
+> [!WARNING]
+> This plugin is unmaintained since Torn Banner's acquisition of the game.
+
 # [NMRiH] Item Blacklist
 Prevent unwanted inventory items from spawning, including those spawned through supply crates.
 
